@@ -119,6 +119,12 @@ def handle_autostart(mode: str, config_path: Path) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Windows 控制台默认可能是 cp936/cp1252，直接输出中文会抛 UnicodeEncodeError
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+        except Exception:  # pragma: no cover
+            pass
     args = build_parser().parse_args(argv)
     config_path = args.config or default_config_path()
     ensure_config(config_path)

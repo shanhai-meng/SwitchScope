@@ -95,10 +95,11 @@ def main() -> int:
         try:
             cmd += build_macos_icon() if sys.platform == "darwin" else build_windows_icon()
         except Exception as exc:
-            print(f"图标生成失败，使用默认图标: {exc}")
+            print("Icon build failed, using default:", exc)
     cmd.append("main.py")
 
-    print("打包命令:", " ".join(cmd[-12:]))
+    # CI 的 Windows 控制台可能是 cp1252，输出一律用 ASCII
+    print("Command:", " ".join(cmd))
     return subprocess.run(cmd, cwd=ROOT, check=False).returncode
 
 
