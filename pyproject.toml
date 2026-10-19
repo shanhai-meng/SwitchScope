@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "switchscope"
+version = "0.1.0"
+description = "SwitchScope：单显示器下 Mac ↔ Windows 一键切换屏幕（与按显示器信号源键等价）"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "SwitchScope" }]
+keywords = ["monitor", "input-source", "kvm", "hyperos", "ddc-ci", "macos", "windows"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Desktop Environment",
+]
+dependencies = [
+    "PyYAML>=6.0",
+    "pynput>=1.7.6",
+]
+
+[project.optional-dependencies]
+mac = [
+    "rumps>=0.4.0",
+    "pyobjc-core>=11.0",
+    "pyobjc-framework-Cocoa>=11.0",
+]
+win = [
+    "pystray>=0.19",
+    "Pillow>=10.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["switchscope*"]
+
+[tool.setuptools]
+py-modules = ["main"]

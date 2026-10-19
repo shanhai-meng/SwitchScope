@@ -1,0 +1,43 @@
+# SwitchScope 配置模板：两台机器各放一份，内容一致，只有 self 不同
+#
+# 首次使用请先执行：
+#   python main.py --discover      # 扫描局域网，自动填入显示器地址
+#   python main.py --probe         # 查看各通道是否可用、列出输入源编号
+
+self: mac
+
+# 显示器设置
+display:
+  # REDMI G Pro 27U 等澎湃 OS 显示器的局域网地址
+  # 留空则首次启动时扫描局域网自动发现，发现结果会写回本文件
+  hyperos_host: ""
+  auto_discover: true
+  # DDC/CI 备用通道使用的外接屏序号（1 = 第一块外接屏）
+  ddc_display_index: 1
+
+# 每台机器接在显示器的哪个输入源上
+#   hyperos: 澎湃 OS 局域网接口里的 sourceId（用 --probe 列出）
+#   ddc:     DDC/CI 的 VCP 0x60 输入源值（备用通道）
+#   两者填其一即可；都填则在主通道失效时自动降级
+machines:
+  mac:
+    label: "Mac"
+    hyperos: 30      # USB-C
+    ddc: 27          # USB-C（VCP 0x60）
+  windows:
+    label: "Windows"
+    hyperos: 23      # HDMI1
+    ddc: 17          # HDMI1（VCP 0x60）
+
+# 控制通道优先级，前面的可用就优先用
+channels:
+  - hyperos
+  - ddc
+
+# 全局热键：两台机器建议用同一个键
+# 语义统一为「切到另一台」——只有当前正在被使用的那台会收到按键，不会冲突
+# 默认 F12（单键即可触发，跨平台通用）；留空则只保留菜单点击
+hotkey: "<f12>"
+
+timeout: 3.0
+verbose: false

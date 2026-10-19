@@ -1,0 +1,4 @@
+# Windows 托盘界面
+-r requirements.txt
+pystray>=0.19
+Pillow>=10.0

@@ -1,0 +1,71 @@
+name: Release 构建 macOS / Windows 成品
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 安装依赖
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt -r requirements-mac.txt
+          pip install pyinstaller pillow
+      - name: 打包 App
+        run: python build_app.py
+      - name: 打包 zip
+        run: ditto -c -k --sequesterRsrc --keepParent dist/SwitchScope.app SwitchScope-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SwitchScope-macOS
+          path: SwitchScope-macOS.zip
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 安装依赖
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt -r requirements-win.txt
+          pip install pyinstaller pillow
+      - name: 打包 exe
+        run: python build_app.py
+      - name: 打包 zip
+        shell: pwsh
+        run: Compress-Archive -Path dist/SwitchScope.exe -DestinationPath SwitchScope-Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SwitchScope-Windows
+          path: SwitchScope-Windows.zip
+
+  release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: 发布到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/SwitchScope-macOS.zip
+            artifacts/SwitchScope-Windows.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
