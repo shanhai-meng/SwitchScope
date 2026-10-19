@@ -188,19 +188,25 @@ def main(argv: list[str] | None = None) -> int:
         print(message)
         return 0
 
-    # 自动发现并写回（配置里没填地址时）
+    # 配置里没填地址时后台自动发现，不阻塞界面启动
+    # （万一没赶在首次切换前完成，按热键时也会按需再发现一次）
     if "hyperos" in settings.channels and not settings.hyperos_host:
-        from switchscope.channels import create_channel
+        import threading
 
-        try:
-            channel = create_channel("hyperos", settings, log)
-            host = channel.discover()
-        except Exception:
-            pass
-        else:
+        def _auto_discover() -> None:
+            from switchscope.channels import create_channel
+
+            try:
+                channel = create_channel("hyperos", settings, log)
+                host = channel.discover()
+            except Exception:
+                return
             if write_back_host(config_path, host):
                 log.info("已自动写入显示器地址 %s", host)
-                settings.hyperos_host = host
+            settings.hyperos_host = host
+            controller.reset_channel()
+
+        threading.Thread(target=_auto_discover, daemon=True).start()
 
     try:
         if sys.platform == "darwin":
