@@ -73,6 +73,7 @@ class TrayApp:
         )
         items.append(pystray.MenuItem("重新检测通道", self.on_redetect))
         items.append(pystray.MenuItem("诊断信息（写到桌面）", self.on_probe))
+        items.append(pystray.MenuItem("设置…", self.on_prefs))
         items.append(pystray.MenuItem("打开配置文件", self.on_open_config))
         items.append(
             pystray.MenuItem(
@@ -135,6 +136,40 @@ class TrayApp:
 
     def on_open_config(self, _icon=None, _item=None) -> None:
         os.startfile(str(self.config_path))  # type: ignore[attr-defined]  # noqa: S606
+
+    def on_prefs(self, _icon=None, _item=None) -> None:
+        from ..settings import load_settings
+        from .settings_window import open_preferences
+
+        def on_saved(_values: object) -> None:
+            try:
+                new_settings = load_settings(self.config_path)
+            except Exception as exc:
+                self.notify(f"配置有误：{exc}")
+                return
+            self.apply_settings(new_settings)
+            self.notify("设置已保存，热键与输入源分配已生效")
+
+        open_preferences(
+            self.settings, self.controller, self.config_path, self.log,
+            is_autostart_enabled(), on_saved,
+        )
+
+    def apply_settings(self, settings: Settings) -> None:
+        self.settings = settings
+        self.controller.settings = settings
+        self.controller.reset_channel()
+        try:
+            self.hotkey.stop()
+        except Exception:  # pragma: no cover
+            pass
+        self.hotkey = HotKey(settings.hotkey, self.on_hotkey, self.log)
+        try:
+            self.hotkey.start()
+        except Exception as exc:  # pragma: no cover
+            self.log.warning("全局热键重注册失败: %s", exc)
+        if self.icon:
+            self.icon.menu = self.build_menu()
 
     def on_toggle_autostart(self, _icon=None, _item=None) -> None:
         wanted = not is_autostart_enabled()

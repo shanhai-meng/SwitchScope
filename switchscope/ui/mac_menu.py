@@ -68,6 +68,30 @@ class MenuApp(rumps.App):
         )
         self.item_autostart.state = is_autostart_enabled()
         self.item_quit = rumps.MenuItem("退出", callback=self.on_quit)
+        self.item_prefs = rumps.MenuItem("设置…", callback=self.on_prefs)
+
+        self._build_menu()
+
+        self.hotkey = HotKey(settings.hotkey, self.on_hotkey, logger)
+        self._start_hotkey()
+
+    def _build_menu(self) -> None:
+        """按当前配置重建菜单（换本机身份 / 改机器名 / 改热键后刷新）。"""
+        label = hotkey_label(self.settings.hotkey, "darwin")
+        self.peer_items = {
+            key: self.peer_items.get(key) or rumps.MenuItem(
+                "", callback=self.on_switch
+            )
+            for key, machine in self.settings.machines.items()
+            if key != self.settings.self_key
+        }
+        for key, item in self.peer_items.items():
+            item.title = f"切到 {self.settings.machines[key].label}  {label}"
+            item._target_key = key  # type: ignore[attr-defined]
+            item.set_callback(self.on_switch)
+
+        self.item_self.title = f"切回本机（{self.settings.self_machine.label}）"
+        self.title = f"🖥 {self.settings.self_machine.label}"
 
         self.menu = [
             *self.peer_items.values(),
@@ -77,15 +101,13 @@ class MenuApp(rumps.App):
             self.item_redetect,
             self.item_probe,
             SEPARATOR,
+            self.item_prefs,
             self.item_autostart,
             self.item_config,
             self.item_log,
             SEPARATOR,
             self.item_quit,
         ]
-
-        self.hotkey = HotKey(settings.hotkey, self.on_hotkey, logger)
-        self._start_hotkey()
 
     # ---- 启动 ----
 
@@ -188,6 +210,43 @@ class MenuApp(rumps.App):
         log_dir = Path.home() / "Library/Application Support/SwitchScope/logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         subprocess.run(["open", str(log_dir)], check=False)
+
+    def on_prefs(self, _sender=None) -> None:
+        """打开设置窗口：所有改动保存后立即生效。"""
+        from ..settings import load_settings
+        from .settings_window import open_preferences
+
+        def on_saved(_values: object) -> None:
+            try:
+                new_settings = load_settings(self.config_path)
+            except Exception as exc:
+                self.notify("配置有误", str(exc))
+                return
+            self.apply_settings(new_settings)
+            self.notify("设置已保存", "热键与输入源分配已立即生效")
+
+        open_preferences(
+            self.settings, self.controller, self.config_path, self.log,
+            is_autostart_enabled(), on_saved,
+        )
+
+    def apply_settings(self, settings: Settings) -> None:
+        """用新配置刷新：控制器、热键、菜单一起换过来。"""
+        self.settings = settings
+        self.controller.settings = settings
+        self.controller.reset_channel()
+        self.item_status.title = "检测通道…"
+        self.item_autostart.state = is_autostart_enabled()
+        try:
+            self.hotkey.stop()
+        except Exception:  # pragma: no cover
+            pass
+        self.hotkey = HotKey(settings.hotkey, self.on_hotkey, self.log)
+        try:
+            self.hotkey.start()
+        except Exception as exc:
+            self.log.warning("全局热键重注册失败: %s", exc)
+        self._build_menu()
 
     def on_toggle_autostart(self, sender=None) -> None:
         wanted = not is_autostart_enabled()
