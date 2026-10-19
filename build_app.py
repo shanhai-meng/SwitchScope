@@ -85,7 +85,7 @@ def main() -> int:
 
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--noconfirm", "--clean", "--windowed", "--name", APP,
+        "--noconfirm", "--clean", "--windowed", "--onefile", "--name", APP,
         "--add-data", f"config.example.yaml{sep}.",
     ]
     cmd += [arg for h in hidden for arg in ("--hidden-import", h)]
