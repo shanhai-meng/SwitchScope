@@ -7,12 +7,27 @@
 """
 from __future__ import annotations
 
+import json
 import logging
+import os
+import sys
+from pathlib import Path
 from typing import Any
 
 from .channels import create_channel
 from .channels.base import Channel, SwitchError
 from .settings import Settings
+
+
+def _state_file() -> Path:
+    """记住「上次切到谁」的状态文件（显示器固件查不了当前输入源）。"""
+    if sys.platform == "darwin":
+        base = Path.home() / "Library/Application Support/SwitchScope"
+    elif os.name == "nt":
+        base = Path(os.environ.get("APPDATA", Path.home())) / "SwitchScope"
+    else:
+        base = Path.home() / ".switchscope"
+    return base / "state.json"
 
 
 class SwitchScopeController:
@@ -22,6 +37,7 @@ class SwitchScopeController:
         self._channel: Channel | None = None
         self._description: str = ""
         self.last_error: str | None = None
+        self._last_target: str | None = self._load_last_target()
 
     # ---- 通道选择 ----
 
@@ -93,6 +109,7 @@ class SwitchScopeController:
                 continue
             self.last_error = None
             self.reset_channel()
+            self._remember(machine_key)
             return f"已切到 {machine.label}（{channel.name} → 输入源 {value}）"
 
         raise SwitchError(
@@ -103,8 +120,35 @@ class SwitchScopeController:
         return self.switch_to(self.settings.self_key)
 
     def toggle(self) -> str:
-        """切到另一台机器（默认第一台非本机机器）。"""
-        return self.switch_to(self.settings.peer().key)
+        """热键语义：在本机与对方之间来回切。
+
+        显示器固件不提供「查询当前输入源」，所以自己记住上次切到了谁：
+        上次是对面 → 这次回本机；否则切到对面。这样同一个键才能来回切。
+        """
+        peer = self.settings.peer().key
+        target = self.settings.self_key if self._last_target == peer else peer
+        return self.switch_to(target)
+
+    # ---- 切换状态记忆 ----
+
+    def _load_last_target(self) -> str | None:
+        try:
+            data = json.loads(_state_file().read_text(encoding="utf-8"))
+            return data.get("last_target")
+        except Exception:  # pragma: no cover - 没有状态文件就当没切过
+            return None
+
+    def _remember(self, machine_key: str) -> None:
+        self._last_target = machine_key
+        try:
+            path = _state_file()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps({"last_target": machine_key}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except Exception as exc:  # pragma: no cover
+            self.log.warning("保存切换状态失败: %s", exc)
 
     # ---- 诊断 ----
 
