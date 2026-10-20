@@ -20,8 +20,24 @@ APP = "SwitchScope"
 
 COMMON_HIDDEN = [
     "switchscope.ui.hotkey",
+    "switchscope.ui.settings_window",
+    "switchscope.ui.prefs_common",
+    "switchscope.ui.config_editor",
     "switchscope.channels.hyperos",
     "switchscope.autostart",
+]
+
+# 设置窗口按平台动态导入，PyInstaller 静态分析抓不到，必须显式声明
+MACOS_HIDDEN = [
+    "switchscope.ui.prefs_mac",
+    "PyObjCTools.AppHelper",
+    "objc",
+]
+WINDOWS_HIDDEN = [
+    "switchscope.ui.prefs_windows",
+    "tkinter",
+    "tkinter.ttk",
+    "tkinter.messagebox",
 ]
 
 
@@ -79,8 +95,10 @@ def main() -> int:
     hidden = list(COMMON_HIDDEN)
     hidden += (
         ["switchscope.ui.win_tray", "switchscope.channels.ddc_windows"]
+        + WINDOWS_HIDDEN
         if sys.platform == "win32"
         else ["switchscope.ui.mac_menu", "switchscope.channels.ddc_macos"]
+        + MACOS_HIDDEN
     )
 
     cmd = [

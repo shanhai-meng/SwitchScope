@@ -8,6 +8,7 @@ import logging
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 import rumps
@@ -19,6 +20,10 @@ from ..settings import Settings
 from .hotkey import HotKey, available, hotkey_label
 
 SEPARATOR = None
+
+# 开机自启时网络可能还没就绪，通道检测失败要重试几次再下结论
+RETRY_TIMES = 4
+RETRY_INTERVAL = 4
 
 ACCESSIBILITY_URL = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
 
@@ -46,6 +51,7 @@ class MenuApp(rumps.App):
         self.config_path = config_path
         self.log = logger
         self._busy = threading.Lock()
+        self._detecting = False
 
         self.peer_items: dict[str, rumps.MenuItem] = {}
         for key, machine in settings.machines.items():
@@ -138,16 +144,26 @@ class MenuApp(rumps.App):
 
     @rumps.timer(1.0)
     def refresh_status(self, _sender=None) -> None:
-        """后台刷新一次通道状态（首次显示后不再轮询，避免打扰显示器）。"""
-        if self.item_status.title != "检测通道…":
+        """后台刷新通道状态。失败会重试：开机自启时 Wi-Fi 往往还没连上。"""
+        if self.item_status.title != "检测通道…" or self._detecting:
             return
+        self._detecting = True
         threading.Thread(target=self._detect_async, daemon=True).start()
 
     def _detect_async(self) -> None:
+        desc = "未知状态"
         try:
-            desc = self.controller.channel_description
-        except Exception as exc:  # pragma: no cover
-            desc = f"通道不可用：{exc}"
+            for attempt in range(RETRY_TIMES):
+                try:
+                    self.controller.active_channel(refresh=True)
+                    desc = self.controller.channel_description
+                    break
+                except Exception as exc:  # pragma: no cover
+                    desc = f"不可用：{exc}"
+                    if attempt < RETRY_TIMES - 1:
+                        time.sleep(RETRY_INTERVAL)
+        finally:
+            self._detecting = False
         self.item_status.title = f"通道: {desc}"
 
     # ---- 交互 ----

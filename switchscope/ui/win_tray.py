@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 from ..autostart import is_enabled as is_autostart_enabled
@@ -18,6 +19,10 @@ from ..settings import Settings
 from .hotkey import HotKey, available, hotkey_label
 
 _APP_NAME = "SwitchScope"
+
+# 开机自启时网络可能还没就绪，通道检测失败要重试几次再下结论
+RETRY_TIMES = 4
+RETRY_INTERVAL = 4
 
 
 def _icon_image():
@@ -119,10 +124,17 @@ class TrayApp:
         threading.Thread(target=self._refresh, daemon=True).start()
 
     def _refresh(self) -> None:
-        try:
-            desc = self.controller.channel_description
-        except Exception as exc:  # pragma: no cover
-            desc = f"通道不可用：{exc}"
+        """通道检测：开机自启时网络可能还没就绪，失败就重试几次。"""
+        desc = "未知状态"
+        for attempt in range(RETRY_TIMES):
+            try:
+                self.controller.active_channel(refresh=True)
+                desc = self.controller.channel_description
+                break
+            except Exception as exc:  # pragma: no cover
+                desc = f"不可用：{exc}"
+                if attempt < RETRY_TIMES - 1:
+                    time.sleep(RETRY_INTERVAL)
         title = f"{_APP_NAME} - {self.settings.self_machine.label}"
         if self.icon is not None:
             self.icon.title = title

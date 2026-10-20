@@ -45,6 +45,7 @@ class SwitchScopeController:
             self._channel = channel
             self._description = desc
             self.last_error = None
+            self.log.info("通道 %s 就绪: %s", name, desc)
             return channel
 
         self._channel = None
