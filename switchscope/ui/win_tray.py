@@ -12,6 +12,7 @@ import threading
 import time
 from pathlib import Path
 
+from .. import __version__
 from ..autostart import is_enabled as is_autostart_enabled
 from ..autostart import set_autostart
 from ..controller import SwitchScopeController
@@ -56,6 +57,8 @@ class TrayApp:
         import pystray
 
         items = []
+        items.append(pystray.MenuItem("设置…", self.on_prefs))
+        items.append(pystray.Menu.SEPARATOR)
         label = hotkey_label(self.settings.hotkey, "default")
         for key, machine in self.settings.machines.items():
             if key == self.settings.self_key:
@@ -78,7 +81,6 @@ class TrayApp:
         )
         items.append(pystray.MenuItem("重新检测通道", self.on_redetect))
         items.append(pystray.MenuItem("诊断信息（写到桌面）", self.on_probe))
-        items.append(pystray.MenuItem("设置…", self.on_prefs))
         items.append(pystray.MenuItem("打开配置文件", self.on_open_config))
         items.append(
             pystray.MenuItem(
@@ -88,6 +90,9 @@ class TrayApp:
             )
         )
         items.append(pystray.Menu.SEPARATOR)
+        items.append(
+            pystray.MenuItem(f"关于 SwitchScope v{__version__}", self.on_about)
+        )
         items.append(pystray.MenuItem("退出", self.on_quit))
         return pystray.Menu(*items)
 
@@ -148,6 +153,23 @@ class TrayApp:
 
     def on_open_config(self, _icon=None, _item=None) -> None:
         os.startfile(str(self.config_path))  # type: ignore[attr-defined]  # noqa: S606
+
+    def on_about(self, _icon=None, _item=None) -> None:
+        """显示版本、本机身份、显示器地址等一览信息。"""
+        import tkinter.messagebox as messagebox
+
+        host = self.settings.hyperos_host or "（未设置，可在『设置…』里搜索）"
+        messagebox.showinfo(
+            f"关于 SwitchScope v{__version__}",
+            "\n".join([
+                f"本机身份：{self.settings.self_machine.label}"
+                f"（{self.settings.self_key}）",
+                f"热键：{hotkey_label(self.settings.hotkey, 'default')}",
+                f"显示器：{host}",
+                "",
+                f"配置文件：{self.config_path}",
+            ]),
+        )
 
     def on_prefs(self, _icon=None, _item=None) -> None:
         from ..settings import load_settings

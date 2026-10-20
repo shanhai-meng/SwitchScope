@@ -13,6 +13,7 @@ from pathlib import Path
 
 import rumps
 
+from .. import __version__
 from ..autostart import is_enabled as is_autostart_enabled
 from ..autostart import set_autostart
 from ..controller import SwitchScopeController
@@ -75,6 +76,9 @@ class MenuApp(rumps.App):
         self.item_autostart.state = is_autostart_enabled()
         self.item_quit = rumps.MenuItem("退出", callback=self.on_quit)
         self.item_prefs = rumps.MenuItem("设置…", callback=self.on_prefs)
+        self.item_about = rumps.MenuItem(
+            f"关于 SwitchScope v{__version__}", callback=self.on_about
+        )
 
         self._build_menu()
 
@@ -100,6 +104,8 @@ class MenuApp(rumps.App):
         self.title = f"🖥 {self.settings.self_machine.label}"
 
         self.menu = [
+            self.item_prefs,
+            SEPARATOR,
             *self.peer_items.values(),
             self.item_self,
             SEPARATOR,
@@ -107,11 +113,11 @@ class MenuApp(rumps.App):
             self.item_redetect,
             self.item_probe,
             SEPARATOR,
-            self.item_prefs,
             self.item_autostart,
             self.item_config,
             self.item_log,
             SEPARATOR,
+            self.item_about,
             self.item_quit,
         ]
 
@@ -226,6 +232,31 @@ class MenuApp(rumps.App):
         log_dir = Path.home() / "Library/Application Support/SwitchScope/logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         subprocess.run(["open", str(log_dir)], check=False)
+
+    def on_about(self, _sender=None) -> None:
+        """显示版本、本机身份、显示器地址等一览信息。"""
+        host = self.settings.hyperos_host or "（未设置，可在『设置…』里搜索）"
+        channel = self.item_status.title
+        if channel.startswith("通道: "):
+            channel = channel[len("通道: "):]
+        rumps.Window(
+            message="\n".join([
+                f"SwitchScope v{__version__}",
+                "",
+                f"本机身份：{self.settings.self_machine.label}"
+                f"（{self.settings.self_key}）",
+                f"热键：{hotkey_label(self.settings.hotkey, 'darwin')}",
+                f"显示器：{host}",
+                f"通道：{channel}",
+                "",
+                f"配置文件：{self.config_path}",
+                f"日志目录：{Path.home() / 'Library/Application Support/SwitchScope/logs'}",
+            ]),
+            title="关于 SwitchScope",
+            dimensions=(640, 280),
+            ok="好",
+            cancel=None,
+        ).run()
 
     def on_prefs(self, _sender=None) -> None:
         """打开设置窗口：所有改动保存后立即生效。"""
