@@ -109,7 +109,6 @@ class SwitchScopeController:
                 continue
             self.last_error = None
             self.reset_channel()
-            self._remember(machine_key)
             return f"已切到 {machine.label}（{channel.name} → 输入源 {value}）"
 
         raise SwitchError(
@@ -120,14 +119,13 @@ class SwitchScopeController:
         return self.switch_to(self.settings.self_key)
 
     def toggle(self) -> str:
-        """热键语义：在本机与对方之间来回切。
+        """热键语义：把画面切到对方那台。
 
-        显示器固件不提供「查询当前输入源」，所以自己记住上次切到了谁：
-        上次是对面 → 这次回本机；否则切到对面。这样同一个键才能来回切。
+        不记忆"上次切到了谁"——键鼠连哪台、F12 就把那台显示器切到对面：
+        Mac 端按 → 切到 Windows；Windows 端按 → 切到 Mac。
+        这样按一次就能去对面，不会出现来回切的混淆。
         """
-        peer = self.settings.peer().key
-        target = self.settings.self_key if self._last_target == peer else peer
-        return self.switch_to(target)
+        return self.switch_to(self.settings.peer().key)
 
     # ---- 切换状态记忆 ----
 
