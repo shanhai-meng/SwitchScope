@@ -19,6 +19,8 @@ from ..autostart import set_autostart
 from ..controller import SwitchScopeController
 from ..settings import Settings
 from .hotkey import HotKey, available, hotkey_label
+from .permissions import prompt_once
+from .update_check import check_latest
 
 SEPARATOR = None
 
@@ -79,11 +81,17 @@ class MenuApp(rumps.App):
         self.item_about = rumps.MenuItem(
             f"关于 SwitchScope v{__version__}", callback=self.on_about
         )
+        self.item_update = rumps.MenuItem("有新版本", callback=self.on_open_update)
+        self._update_info: dict[str, str] | None = None
+        self._perms_done = False
 
         self._build_menu()
 
         self.hotkey = HotKey(settings.hotkey, self.on_hotkey, logger)
         self._start_hotkey()
+
+        # 启动后稍等一会儿再查更新，别拖慢启动（失败静默）
+        threading.Thread(target=self._check_update_async, daemon=True).start()
 
     def _build_menu(self) -> None:
         """按当前配置重建菜单（换本机身份 / 改机器名 / 改热键后刷新）。"""
@@ -104,8 +112,6 @@ class MenuApp(rumps.App):
         self.title = f"🖥 {self.settings.self_machine.label}"
 
         self.menu = [
-            self.item_prefs,
-            SEPARATOR,
             *self.peer_items.values(),
             self.item_self,
             SEPARATOR,
@@ -114,9 +120,11 @@ class MenuApp(rumps.App):
             self.item_probe,
             SEPARATOR,
             self.item_autostart,
+            self.item_prefs,
             self.item_config,
             self.item_log,
             SEPARATOR,
+            *([self.item_update] if self._update_info else []),
             self.item_about,
             self.item_quit,
         ]
@@ -151,6 +159,9 @@ class MenuApp(rumps.App):
     @rumps.timer(1.0)
     def refresh_status(self, _sender=None) -> None:
         """后台刷新通道状态。失败会重试：开机自启时 Wi-Fi 往往还没连上。"""
+        if not self._perms_done:
+            self._perms_done = True
+            prompt_once(self.log)  # 首次启动引导授权（NSApp 此时已跑起来）
         if self.item_status.title != "检测通道…" or self._detecting:
             return
         self._detecting = True
@@ -232,6 +243,31 @@ class MenuApp(rumps.App):
         log_dir = Path.home() / "Library/Application Support/SwitchScope/logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         subprocess.run(["open", str(log_dir)], check=False)
+
+    # ---- 版本更新 ----
+
+    def _check_update_async(self) -> None:
+        """启动后查一下有没有新版本（在后台线程，失败静默）。"""
+        time.sleep(6)  # 等启动完成，也避开刚连上网的那几秒
+        info = check_latest()
+        if not info:
+            return
+        self._update_info = info
+        self.item_update.title = f"有新版本 v{info['version']}（点击下载）"
+        self._build_menu()
+        self.notify(
+            "SwitchScope 有新版本",
+            f"v{info['version']} 已发布，点菜单里的条目即可前往下载",
+        )
+
+    def on_open_update(self, _sender=None) -> None:
+        """打开最新版本的 Release 页面。"""
+        import webbrowser  # noqa: PLC0415
+
+        url = (self._update_info or {}).get(
+            "url", "https://github.com/shanhai-meng/SwitchScope/releases/latest"
+        )
+        webbrowser.open(url)
 
     def on_about(self, _sender=None) -> None:
         """显示版本、本机身份、显示器地址等一览信息。"""

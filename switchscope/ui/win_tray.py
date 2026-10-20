@@ -50,6 +50,8 @@ class TrayApp:
         self._busy = threading.Lock()
         self.hotkey = HotKey(settings.hotkey, self.on_hotkey, logger)
         self.icon = None
+        self._update_info: dict[str, str] | None = None
+        threading.Thread(target=self._check_update_async, daemon=True).start()
 
     # ---- 菜单 ----
 
@@ -57,8 +59,6 @@ class TrayApp:
         import pystray
 
         items = []
-        items.append(pystray.MenuItem("设置…", self.on_prefs))
-        items.append(pystray.Menu.SEPARATOR)
         label = hotkey_label(self.settings.hotkey, "default")
         for key, machine in self.settings.machines.items():
             if key == self.settings.self_key:
@@ -81,7 +81,6 @@ class TrayApp:
         )
         items.append(pystray.MenuItem("重新检测通道", self.on_redetect))
         items.append(pystray.MenuItem("诊断信息（写到桌面）", self.on_probe))
-        items.append(pystray.MenuItem("打开配置文件", self.on_open_config))
         items.append(
             pystray.MenuItem(
                 "开机自启",
@@ -89,7 +88,16 @@ class TrayApp:
                 checked=lambda item: is_autostart_enabled(),
             )
         )
+        items.append(pystray.MenuItem("设置…", self.on_prefs))
+        items.append(pystray.MenuItem("打开配置文件", self.on_open_config))
         items.append(pystray.Menu.SEPARATOR)
+        if self._update_info:
+            items.append(
+                pystray.MenuItem(
+                    f"有新版本 v{self._update_info['version']}（点击下载）",
+                    self.on_open_update,
+                )
+            )
         items.append(
             pystray.MenuItem(f"关于 SwitchScope v{__version__}", self.on_about)
         )
@@ -153,6 +161,30 @@ class TrayApp:
 
     def on_open_config(self, _icon=None, _item=None) -> None:
         os.startfile(str(self.config_path))  # type: ignore[attr-defined]  # noqa: S606
+
+    # ---- 版本更新 ----
+
+    def _check_update_async(self) -> None:
+        """启动后查一下有没有新版本；查到就在菜单里插入提示项。"""
+        from .update_check import check_latest  # noqa: PLC0415
+
+        time.sleep(6)  # 等启动完成，也避免刚联网那几秒失败
+        info = check_latest()
+        if not info:
+            return
+        self._update_info = info
+        if self.icon:
+            self.icon.menu = self.build_menu()
+            self.icon.update_menu()
+        self.notify(f"SwitchScope v{info['version']} 已发布，点托盘菜单下载")
+
+    def on_open_update(self, _icon=None, _item=None) -> None:
+        import webbrowser  # noqa: PLC0415
+
+        url = (self._update_info or {}).get(
+            "url", "https://github.com/shanhai-meng/SwitchScope/releases/latest"
+        )
+        webbrowser.open(url)
 
     def on_about(self, _icon=None, _item=None) -> None:
         """显示版本、本机身份、显示器地址等一览信息。"""

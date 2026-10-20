@@ -23,6 +23,8 @@ COMMON_HIDDEN = [
     "switchscope.ui.settings_window",
     "switchscope.ui.prefs_common",
     "switchscope.ui.config_editor",
+    "switchscope.ui.permissions",
+    "switchscope.ui.update_check",
     "switchscope.channels.hyperos",
     "switchscope.autostart",
 ]
